@@ -59,7 +59,10 @@ def question(update, context):
 
 def main():
     telegram_token = os.getenv('TELEGRAM_BOT_TOKEN')
+    assert telegram_token is not None, "env TELEGRAM_BOT_TOKEN is not set"
+
     telegram_password = os.getenv('TELEGRAM_BOT_ADMIN_PASSWORD')
+    assert telegram_password is not None, "env TELEGRAM_BOT_ADMIN_PASSWORD is not set"
 
     updater = Updater(telegram_token, use_context=True)
     dp = updater.dispatcher
