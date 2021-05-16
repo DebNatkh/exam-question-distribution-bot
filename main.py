@@ -2,7 +2,7 @@
 
 import os
 from random import choice
-
+import filetype
 from telegram.ext import Updater, CommandHandler
 from tinydb import TinyDB, where
 
@@ -51,7 +51,10 @@ def question(update, context):
                 context.bot.send_document(chat_id=admin['chat_id'], document=doc)
                 doc.seek(0)
             given_questions.insert({'chat_id': chat_id, 'category': category})
-        context.bot.send_document(chat_id=chat_id, document=doc)
+        if filetype.is_image(filename):
+            context.bot.send_photo(chat_id=chat_id, photo=doc)
+        else:
+            context.bot.send_document(chat_id=chat_id, document=doc)
 
 
 def main():
