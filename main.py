@@ -1,25 +1,22 @@
 #! /usr/bin/env python3
 
-from telegram.ext import Updater, CommandHandler
-import requests
-import re
 import os
 from random import choice
-import csv
 
-D = dict()
-given = set()
-admins = set()
+from telegram.ext import Updater, CommandHandler
+from tinydb import TinyDB, where
 
+db = TinyDB('db.json')
+admins_table = db.table("admins")
+given_questions = db.table("given")
+
+quiet_categories = ['meme']
 
 
 def register_admin(update, context):
     chat_id = update.message.chat_id
-    admins.add(chat_id)
-    with open("admins.txt", "w") as f:
-        print(*list(admins), file = f)
+    admins_table.insert({'chat_id': chat_id})
     context.bot.send_message(chat_id=chat_id, text="Added you to admins list")
-
 
 
 def start(update, context):
@@ -30,47 +27,45 @@ def start(update, context):
 def question(update, context):
     chat_id = update.message.chat_id
     category = update.message.text.split()[-1].lower()
-    if (category not in os.listdir('questions')):
+    question_requested: bool = False
+    if category not in os.listdir('questions'):
         text = "Не смог найти такую категорию вопросов"
     else:
-        cat_id = f'{chat_id}-{category}'
-        if (cat_id in given and category != 'meme'):
+        if given_questions.search((where('chat_id') == chat_id) & (where('category') == category)):
             text = "Уже выдал вам задачу на эту категорию"
         else:
             text = f"Вот вопрос на {category}"
+            question_requested = True
     context.bot.send_message(chat_id=chat_id, text=text)
-    if (text.startswith("Вот")):
-        filename = f"questions/{category}/" + choice(os.listdir(f'questions/{category}/'))
-        print(filename)
-        doc = open(filename, 'rb')
+    if not question_requested:
+        return
 
-        if (category != 'meme'):
-            for admin in admins:
-                context.bot.send_message(chat_id=admin, text=f'User {update.message.from_user} (category: {category}):')
-                context.bot.send_document(chat_id=admin, document=doc)
+    filename = f"questions/{category}/" + choice(os.listdir(f'questions/{category}/'))
+    print(filename)
+
+    with open(filename, 'rb') as doc:
+        if category not in quiet_categories:
+            for admin in admins_table.all():
+                context.bot.send_message(chat_id=admin['chat_id'],
+                                         text=f'User {update.message.from_user} (category: {category}):')
+                context.bot.send_document(chat_id=admin['chat_id'], document=doc)
                 doc.seek(0)
+            given_questions.insert({'chat_id': chat_id, 'category': category})
         context.bot.send_document(chat_id=chat_id, document=doc)
 
-        given.add(cat_id)
-        with open("given.txt", "w") as f:
-            print(*list(given), file = f)
-            
 
 def main():
-    updater = Updater('TELEGRAM_BOT_TOKEN', use_context=True)
+    telegram_token = os.getenv('TELEGRAM_BOT_TOKEN')
+    telegram_password = os.getenv('TELEGRAM_BOT_ADMIN_PASSWORD')
+
+    updater = Updater(telegram_token, use_context=True)
     dp = updater.dispatcher
     dp.add_handler(CommandHandler('question', question))
     dp.add_handler(CommandHandler('start', start))
-    dp.add_handler(CommandHandler('register_admin_264841956', register_admin))
+    dp.add_handler(CommandHandler(f'register_admin_{telegram_password}', register_admin))
     updater.start_polling()
     updater.idle()
-    
+
 
 if __name__ == '__main__':
-    given = set(list(map(str, open("given.txt", "r").readline().split())))
-    admins = set(list(map(int, open("admins.txt", "r").readline().split())))
-    with open('db.csv', newline='') as csvfile:
-        spamreader = csv.reader(csvfile, delimiter=',', quotechar='|')
-        for row in spamreader:
-            D[row[0].lower()] = (row)
     main()
